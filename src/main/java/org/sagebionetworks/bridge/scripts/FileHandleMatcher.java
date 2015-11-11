@@ -10,6 +10,7 @@ import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.google.common.base.Stopwatch;
+import org.apache.commons.lang.StringUtils;
 import org.sagebionetworks.client.SynapseClient;
 import org.sagebionetworks.client.SynapseClientImpl;
 import org.sagebionetworks.client.exceptions.SynapseException;
@@ -54,6 +55,7 @@ public class FileHandleMatcher {
         synapseHelper.setSynapseClient(synapseClient);
     }
 
+    @SuppressWarnings("ConstantConditions")
     public static void execute() {
         // iterate over all Synapse tables
         Iterable<Item> synapseTablesDdbIter = synapseTablesDdbTable.scan();
@@ -124,11 +126,11 @@ public class FileHandleMatcher {
                                     stopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
                         }
 
-                        try {
-                            Row oneRow = tableRowIter.next();
-                            List<String> rowValueList = oneRow.getValues();
-                            String recordId = rowValueList.get(recordIdColIdx);
+                        Row oneRow = tableRowIter.next();
+                        List<String> rowValueList = oneRow.getValues();
+                        String recordId = rowValueList.get(recordIdColIdx);
 
+                        try {
                             // iterate over columns
                             for (int i = 0; i < numCols; i++) {
                                 SelectColumn oneHeader = headerList.get(i);
@@ -137,8 +139,14 @@ public class FileHandleMatcher {
                                     continue;
                                 }
 
+                                String fileHandleId = rowValueList.get(i);
+                                if (StringUtils.isBlank(fileHandleId)) {
+                                    // no file handle, don't bother checking
+                                    continue;
+                                }
+
                                 // load file handle
-                                FileHandle fileHandle = synapseClient.getRawFileHandle(rowValueList.get(i));
+                                FileHandle fileHandle = synapseClient.getRawFileHandle(fileHandleId);
                                 if (!fileHandle.getFileName().contains(oneHeader.getName())) {
                                     // once we've found one record Id, we don't need to check the rest of the columns
                                     System.out.println("BAD RECORD FOUND: recordId " + recordId + ", table " +
@@ -148,7 +156,7 @@ public class FileHandleMatcher {
                             }
                         } catch (RuntimeException | SynapseException ex) {
                             System.err.println("Error iterating Synapse table " + tableId + ", schema " + schemaKey +
-                                    ":" + ex.getMessage());
+                                    ", recordId " + recordId + ": " + ex.getMessage());
                             ex.printStackTrace();
                         }
                     }
