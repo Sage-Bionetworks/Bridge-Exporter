@@ -147,11 +147,11 @@ public class FileHandleMatcher {
 
                                 // load file handle
                                 FileHandle fileHandle = synapseClient.getRawFileHandle(fileHandleId);
-                                if (!fileHandle.getFileName().contains(oneHeader.getName())) {
-                                    // once we've found one record Id, we don't need to check the rest of the columns
-                                    System.out.println("BAD RECORD FOUND: recordId " + recordId + ", table " +
-                                            tableId + ", schema " + schemaKey);
-                                    break;
+                                String filename = fileHandle.getFileName();
+                                if (!filename.contains(oneHeader.getName())) {
+                                    System.out.println("BAD FILEHANDLE FOUND: table " + schemaKey + " (id " + tableId +
+                                            "), recordId " + recordId + ", column " + i + ", filename " + filename +
+                                            ", filehandleId " + fileHandleId);
                                 }
                             }
                         } catch (RuntimeException | SynapseException ex) {
