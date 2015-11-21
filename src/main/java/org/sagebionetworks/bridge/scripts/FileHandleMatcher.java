@@ -3,18 +3,20 @@ package org.sagebionetworks.bridge.scripts;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
+import com.google.common.base.Charsets;
 import com.google.common.base.Stopwatch;
-import org.apache.commons.lang.StringUtils;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.io.Files;
 import org.sagebionetworks.client.SynapseClient;
 import org.sagebionetworks.client.SynapseClientImpl;
 import org.sagebionetworks.client.exceptions.SynapseException;
-import org.sagebionetworks.repo.model.file.FileHandle;
 import org.sagebionetworks.repo.model.table.ColumnType;
 import org.sagebionetworks.repo.model.table.Row;
 import org.sagebionetworks.repo.model.table.SelectColumn;
@@ -32,7 +34,7 @@ public class FileHandleMatcher {
 
     public static void main(String[] args) throws IOException {
         init();
-        execute();
+        execute(args[0]);
     }
 
     public static void init() throws IOException {
@@ -56,7 +58,12 @@ public class FileHandleMatcher {
     }
 
     @SuppressWarnings("ConstantConditions")
-    public static void execute() {
+    public static void execute(String inputFileName) throws IOException {
+        // Get wrong file handle IDs. We read it as a list of lines, but convert it into a hash set so we can do fast
+        // checking.
+        List<String> wrongFileHandleList = Files.readLines(new File(inputFileName), Charsets.UTF_8);
+        Set<String> wrongFileHandleSet = ImmutableSet.copyOf(wrongFileHandleList);
+
         // iterate over all Synapse tables
         Iterable<Item> synapseTablesDdbIter = synapseTablesDdbTable.scan();
         for (Item oneSynapseTableDdbItem : synapseTablesDdbIter) {
@@ -121,11 +128,6 @@ public class FileHandleMatcher {
                 Stopwatch stopwatch = Stopwatch.createStarted();
                 try {
                     while (tableRowIter.hasNext()) {
-                        if (++rowCount % 1000 == 0) {
-                            System.out.println("Rows so far: " + rowCount + " in " +
-                                    stopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
-                        }
-
                         Row oneRow = tableRowIter.next();
                         List<String> rowValueList = oneRow.getValues();
                         String recordId = rowValueList.get(recordIdColIdx);
@@ -140,21 +142,13 @@ public class FileHandleMatcher {
                                 }
 
                                 String fileHandleId = rowValueList.get(i);
-                                if (StringUtils.isBlank(fileHandleId)) {
-                                    // no file handle, don't bother checking
-                                    continue;
-                                }
-
-                                // load file handle
-                                FileHandle fileHandle = synapseClient.getRawFileHandle(fileHandleId);
-                                String filename = fileHandle.getFileName();
-                                if (!filename.contains(oneHeader.getName())) {
+                                if (wrongFileHandleSet.contains(fileHandleId)) {
                                     System.out.println("BAD FILEHANDLE FOUND: table " + schemaKey + " (id " + tableId +
-                                            "), recordId " + recordId + ", column " + i + ", filename " + filename +
-                                            ", filehandleId " + fileHandleId);
+                                            "), recordId " + recordId + ", column " + i + ", filehandleId " +
+                                            fileHandleId);
                                 }
                             }
-                        } catch (RuntimeException | SynapseException ex) {
+                        } catch (RuntimeException ex) {
                             System.err.println("Error iterating Synapse table " + tableId + ", schema " + schemaKey +
                                     ", recordId " + recordId + ": " + ex.getMessage());
                             ex.printStackTrace();
