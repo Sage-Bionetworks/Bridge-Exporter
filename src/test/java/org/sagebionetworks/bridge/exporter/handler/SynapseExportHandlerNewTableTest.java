@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.google.common.collect.ImmutableList;
-import org.sagebionetworks.bridge.exporter.synapse.ColumnDefinition;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -27,6 +27,7 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.exporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.exporter.helper.BridgeHelperTest;
 import org.sagebionetworks.bridge.exporter.metrics.Metrics;
+import org.sagebionetworks.bridge.exporter.synapse.ColumnDefinition;
 import org.sagebionetworks.bridge.exporter.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
 import org.sagebionetworks.bridge.exporter.util.TestUtil;
@@ -184,6 +185,31 @@ public class SynapseExportHandlerNewTableTest {
         handler.uploadToSynapseForTask(task);
 
         // validate tsv file
+        List<String> tsvLineList = TestUtil.bytesToLines(tsvBytes);
+        assertEquals(tsvLineList.size(), 2);
+        SynapseExportHandlerTest.validateTsvHeaders(tsvLineList.get(0), "originalTable");
+        SynapseExportHandlerTest.validateTsvRow(tsvLineList.get(1),
+                SynapseExportHandlerTest.DUMMY_SCHEMA_KEY.toString());
+
+        validateTableCreation(handler);
+    }
+
+    @Test
+    public void appVersionExportHandlerTestWithValidTableIdButNoTable() throws Exception {
+        SynapseExportHandler handler = new AppVersionExportHandler();
+        setup(handler);
+
+        // change some stub logic
+        this.ddbSynapseTableId = SynapseExportHandlerTest.TEST_SYNAPSE_TABLE_ID;
+        when(mockSynapseHelper.getTableWithRetry(SynapseExportHandlerTest.TEST_SYNAPSE_TABLE_ID)).thenThrow(
+                new SynapseNotFoundException());
+
+        // execute
+        handler.handle(SynapseExportHandlerTest.makeSubtask(task, "{}"));
+        handler.uploadToSynapseForTask(task);
+
+        // validate tsv file
+        verify(mockSynapseHelper).getTableWithRetry(any());
         List<String> tsvLineList = TestUtil.bytesToLines(tsvBytes);
         assertEquals(tsvLineList.size(), 2);
         SynapseExportHandlerTest.validateTsvHeaders(tsvLineList.get(0), "originalTable");

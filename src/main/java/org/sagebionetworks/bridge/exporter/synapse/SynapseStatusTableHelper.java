@@ -1,10 +1,12 @@
 package org.sagebionetworks.bridge.exporter.synapse;
 
-import java.util.List;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.sagebionetworks.bridge.exporter.exceptions.BridgeExporterException;
+import org.sagebionetworks.bridge.exporter.worker.ExportTask;
+import org.sagebionetworks.bridge.exporter.worker.ExportWorkerManager;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.sagebionetworks.repo.model.table.ColumnType;
 import org.sagebionetworks.repo.model.table.PartialRow;
@@ -12,9 +14,7 @@ import org.sagebionetworks.repo.model.table.PartialRowSet;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.exporter.exceptions.BridgeExporterException;
-import org.sagebionetworks.bridge.exporter.worker.ExportTask;
-import org.sagebionetworks.bridge.exporter.worker.ExportWorkerManager;
+import java.util.List;
 
 /**
  * Highly specialized helper, which writes the status row to the Synapse status table, creating it if it doesn't
@@ -75,7 +75,17 @@ public class SynapseStatusTableHelper {
         // Does the table already exist? If not, create it.
         String synapseTableId = manager.getSynapseTableIdFromDdb(task, SynapseHelper.DDB_TABLE_SYNAPSE_META_TABLES,
                 SynapseHelper.DDB_KEY_TABLE_NAME, getStatusTableName(studyId));
-        if (synapseTableId == null) {
+
+        // check if the status table exists in synapse
+        SynapseHelper synapseHelper = manager.getSynapseHelper();
+        boolean isExisted = true;
+        try {
+            synapseHelper.getTableWithRetry(synapseTableId);
+        } catch (SynapseNotFoundException e) {
+            isExisted = false;
+        }
+
+        if (synapseTableId == null || !isExisted) {
             synapseTableId = createStatusTable(task, studyId);
         }
 

@@ -22,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.sagebionetworks.repo.model.table.PartialRow;
 import org.sagebionetworks.repo.model.table.PartialRowSet;
+import org.sagebionetworks.repo.model.table.TableEntity;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -66,6 +67,7 @@ public class SynapseStatusTableHelperTest {
 
         // mock Synapse Helper
         SynapseHelper mockSynapseHelper = mock(SynapseHelper.class);
+        mockManager.setSynapseHelper(mockSynapseHelper);
         when(mockSynapseHelper.createTableWithColumnsAndAcls(SynapseStatusTableHelper.COLUMN_LIST, DATA_ACCESS_TEAM_ID,
                 SYNAPSE_PRINCIPAL_ID, SYNAPSE_PROJECT_ID, SYNAPSE_TABLE_NAME)).thenReturn(SYNAPSE_TABLE_ID);
 
@@ -75,6 +77,7 @@ public class SynapseStatusTableHelperTest {
         serverSideColumn.setId(COLUMN_ID);
         when(mockSynapseHelper.getColumnModelsForTableWithRetry(SYNAPSE_TABLE_ID)).thenReturn(ImmutableList.of(
                 serverSideColumn));
+        when(mockSynapseHelper.getTableWithRetry(SYNAPSE_TABLE_ID)).thenReturn(new TableEntity());
 
         // set up helper
         SynapseStatusTableHelper statusTableHelper = new SynapseStatusTableHelper();
@@ -88,6 +91,7 @@ public class SynapseStatusTableHelperTest {
         statusTableHelper.initTableAndWriteStatus(task1, STUDY_ID);
 
         // verify we created the table
+        verify(mockSynapseHelper).getTableWithRetry(any());
         verify(mockSynapseHelper, times(1)).createTableWithColumnsAndAcls(SynapseStatusTableHelper.COLUMN_LIST,
                 DATA_ACCESS_TEAM_ID, SYNAPSE_PRINCIPAL_ID, SYNAPSE_PROJECT_ID, SYNAPSE_TABLE_NAME);
         verify(mockManager, times(1)).setSynapseTableIdToDdb(task1, SynapseHelper.DDB_TABLE_SYNAPSE_META_TABLES,

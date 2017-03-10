@@ -77,12 +77,12 @@
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>bridge-base</artifactId>
-            <version>2.7.3</version>
+            <version>2.7.4</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
             <artifactId>rest-client</artifactId>
-            <version>0.12.16</version>
+            <version>0.12.32</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
