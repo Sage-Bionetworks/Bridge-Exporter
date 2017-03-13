@@ -22,10 +22,10 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 
 public class BridgeExporterRequestTest {
-    private static final String END_DATE_TIME_STRING = "2016-05-09T13:53:13.801-0700";
+    private static final String END_DATE_TIME_STRING = "2015-11-30T13:53:13.801-0700";
     private static final DateTime END_DATE_TIME = DateTime.parse(END_DATE_TIME_STRING);
 
-    private static final String START_DATE_TIME_STRING = "2016-05-09T13:51:57.682-0700";
+    private static final String START_DATE_TIME_STRING = "2015-11-30T13:51:57.682-0700";
     private static final DateTime START_DATE_TIME = DateTime.parse(START_DATE_TIME_STRING);
 
     private static final Set<String> STUDY_WHITELIST = ImmutableSet.of("test-study");
@@ -144,14 +144,14 @@ public class BridgeExporterRequestTest {
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "startDateTime and endDateTime must both be specified or both be absent.")
+            "startDateTime and endDateTime must both be specified if one exists.")
     public void startDateTimeWithoutEndDateTime() {
         new BridgeExporterRequest.Builder().withStartDateTime(START_DATE_TIME).withStudyWhitelist(STUDY_WHITELIST)
                 .build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "startDateTime and endDateTime must both be specified or both be absent.")
+            "startDateTime and endDateTime must both be specified if one exists.")
     public void endDateTimeWithoutStartDateTime() {
         new BridgeExporterRequest.Builder().withEndDateTime(END_DATE_TIME).withStudyWhitelist(STUDY_WHITELIST)
                 .build();
@@ -171,11 +171,23 @@ public class BridgeExporterRequestTest {
                 .withStudyWhitelist(STUDY_WHITELIST).build();
     }
 
-    //@Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-    //        "If start- and endDateTime are specified, studyWhitelist must also be specified.")
-    //public void startAndEndDateWithoutStudyWhitelist() {
-    //    new BridgeExporterRequest.Builder().withStartDateTime(START_DATE_TIME).withEndDateTime(END_DATE_TIME).build();
-    //}
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "Date, startDateTime and endDateTime must be in the same date.")
+    public void dateIsDifferentForDateTimeRangeAndDate() {
+        new BridgeExporterRequest.Builder().withDate(TEST_DATE.minusDays(1)).withStartDateTime(START_DATE_TIME).withEndDateTime(END_DATE_TIME).build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "Date, startDateTime and endDateTime must be in the same date.")
+    public void dateIsDifferentForDateAndStartDateTime() {
+        new BridgeExporterRequest.Builder().withDate(TEST_DATE).withStartDateTime(START_DATE_TIME.minusDays(1)).withEndDateTime(END_DATE_TIME).build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "Date, startDateTime and endDateTime must be in the same date.")
+    public void dateIsDifferentForDateAndEndDateTime() {
+        new BridgeExporterRequest.Builder().withDate(TEST_DATE).withStartDateTime(START_DATE_TIME).withEndDateTime(END_DATE_TIME.plusDays(1)).build();
+    }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
@@ -185,12 +197,12 @@ public class BridgeExporterRequestTest {
                 .withStudyWhitelist(STUDY_WHITELIST).build();
     }
 
-    //@Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-    //        "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
-    //public void withDateAndStartAndEndDate() {
-    //    new BridgeExporterRequest.Builder().withDate(TEST_DATE).withStartDateTime(START_DATE_TIME)
-    //            .withEndDateTime(END_DATE_TIME).withStudyWhitelist(STUDY_WHITELIST).build();
-    //}
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
+    public void withDateAndStartAndEndDate() {
+        new BridgeExporterRequest.Builder().withDate(TEST_DATE).withRecordIdS3Override(TEST_RECORD_OVERRIDE)
+                .withStudyWhitelist(STUDY_WHITELIST).build();
+    }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")

@@ -330,22 +330,24 @@ public class BridgeExporterRequest {
 
         /** Builds a Bridge EX request object and validates all parameters. */
         public BridgeExporterRequest build() {
-            // startDateTime and endDateTime must be both specified or both absent.
+            // startDateTime and endDateTime must be specified for request without override.
             boolean hasStartDateTime = startDateTime != null;
             boolean hasEndDateTime = endDateTime != null;
             if (hasStartDateTime ^ hasEndDateTime) {
-                throw new IllegalStateException("startDateTime and endDateTime must both be specified or both be " +
-                        "absent.");
+                throw new IllegalStateException("startDateTime and endDateTime must both be specified if one exists.");
             }
             if (hasStartDateTime && !startDateTime.isBefore(endDateTime)) {
                 throw new IllegalStateException("startDateTime must be before endDateTime.");
             }
 
-            // If start/endDateTime are specified, there must be a studyWhitelist.
-            //if (hasStartDateTime && studyWhitelist == null) {
-            //    throw new IllegalStateException("If start- and endDateTime are specified, studyWhitelist must also " +
-            //            "be specified.");
-            //}
+            // if both datetime range and date exists, they must be in the same date
+            if (hasStartDateTime && this.date != null) {
+                LocalDate startDate = this.startDateTime.toLocalDate();
+                LocalDate endDate = this.endDateTime.toLocalDate();
+                if (!(this.date.isEqual(startDate) && startDate.isEqual(endDate))) {
+                    throw new IllegalStateException("Date, startDateTime and endDateTime must be in the same date.");
+                }
+            }
 
             // Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.
             int numRecordSources = 0;

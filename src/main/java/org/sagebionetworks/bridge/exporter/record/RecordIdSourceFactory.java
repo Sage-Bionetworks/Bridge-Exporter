@@ -132,15 +132,13 @@ public class RecordIdSourceFactory {
             recordItemIter = getDynamoRecordIdSourceWithoutStudyWhiteList(request, studyIdsToQuery);
         }
 
-        System.out.println("returned record items: " + recordItemIter);
-
-
         // finally, update studies in export time table
         // right now, the studyIdsToQuery contains all modified study ids
-        // only if it is not a re-export need it to update the ddb table
+        // even if a study has no record to export during given time range,
+        // we still update its last export date time to the newest one for convenience.
+        // only if it is not a re-export needs it to update the ddb table
         if (!request.getReExport()) {
             for (String studyId: studyIdsToQuery.keySet()) {
-                System.out.println(studyId);
                 ddbExportTimeTable.putItem(new Item().withPrimaryKey(STUDY_ID, studyId).withNumber(LAST_EXPORT_DATE_TIME, endDateTime));
             }
         }
@@ -221,7 +219,7 @@ public class RecordIdSourceFactory {
 
         Map<String, String> studyIdWithLastExportDateTime = new HashMap<>();
 
-        // only if the request is not a re-export need it to look up ddb table
+        // only if the request is not a re-export needs it to look up ddb table
         if (request.getStudyWhitelist() == null && !request.getReExport()) {
             // get the export time table from ddb as a whole
             ScanRequest scanRequest = new ScanRequest()
@@ -234,8 +232,6 @@ public class RecordIdSourceFactory {
                 studyIdWithLastExportDateTime.put(item.get(STUDY_ID).getS(), item.get(LAST_EXPORT_DATE_TIME).getN());
             }
         }
-
-        System.out.println(studyIdWithLastExportDateTime);
 
         Map<String, String> studyIdsToQuery = new TreeMap<>();
 
