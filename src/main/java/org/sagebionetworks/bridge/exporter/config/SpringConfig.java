@@ -125,11 +125,6 @@ public class SpringConfig {
         return ddbRecordTable().getIndex("study-uploadedOn-index");
     }
 
-    @Bean(name = "ddbRecordUploadDateIndex")
-    public Index ddbRecordUploadDateIndex() {
-        return ddbRecordTable().getIndex("uploadDate-index");
-    }
-
     @Bean(name = "ddbStudyTable")
     public Table ddbStudyTable() {
         return ddbClient().getTable(ddbPrefix() + "Study");

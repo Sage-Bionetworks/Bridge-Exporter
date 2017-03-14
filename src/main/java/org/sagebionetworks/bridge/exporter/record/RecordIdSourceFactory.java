@@ -2,10 +2,9 @@ package org.sagebionetworks.bridge.exporter.record;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.annotation.Resource;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
@@ -20,7 +19,6 @@ import com.google.common.collect.Iterables;
 import org.apache.commons.lang.StringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.joda.time.Interval;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -39,6 +37,7 @@ public class RecordIdSourceFactory {
     private static final RecordIdSource.Converter<Item> DYNAMO_ITEM_CONVERTER = from -> from.getString("id");
     private static final RecordIdSource.Converter<String> NOOP_CONVERTER = from -> from;
     static final String STUDY_ID = "studyId";
+    static final String IDENTIFIER = "identifier";
     static final String LAST_EXPORT_DATE_TIME = "lastExportDateTime";
     static final String UPLOADED_ON = "uploadedOn";
 
@@ -49,9 +48,9 @@ public class RecordIdSourceFactory {
     // Spring helpers
     private DynamoQueryHelper ddbQueryHelper;
     private Index ddbRecordStudyUploadedOnIndex;
-    private Index ddbRecordUploadDateIndex;
     private S3Helper s3Helper;
     private Table ddbExportTimeTable;
+    private Table ddbStudyTable;
     private AmazonDynamoDBClient ddbClientScan;
 
     /** Config, used to get S3 bucket for record ID override files. */
@@ -73,16 +72,15 @@ public class RecordIdSourceFactory {
         this.ddbRecordStudyUploadedOnIndex = ddbRecordStudyUploadedOnIndex;
     }
 
-    /** DDB Record table Upload Date index. */
-    @Resource(name = "ddbRecordUploadDateIndex")
-    final void setDdbRecordUploadDateIndex(Index ddbRecordUploadDateIndex) {
-        this.ddbRecordUploadDateIndex = ddbRecordUploadDateIndex;
-    }
-
     /** DDB Export Time Table. */
     @Resource(name = "ddbExportTimeTable")
     final void setDdbExportTimeTable(Table ddbExportTimeTable) {
         this.ddbExportTimeTable = ddbExportTimeTable;
+    }
+
+    @Resource(name = "ddbStudyTable")
+    public final void setDdbStudyTable(Table ddbStudyTable) {
+        this.ddbStudyTable = ddbStudyTable;
     }
 
     @Resource(name = "ddbClientScan")
@@ -122,15 +120,22 @@ public class RecordIdSourceFactory {
      */
     private Iterable<String> getDynamoRecordIdSourceGeneral(BridgeExporterRequest request) {
         Map<String, String> studyIdsToQuery = bootstrapStudyIdsToQuery(request);
+
         long endDateTime = request.getEndDateTime().getMillis();
 
         // proceed
         Iterable<Item> recordItemIter;
-        if (request.getStudyWhitelist() != null) {
-            recordItemIter = getDynamoRecordIdSourceWithStudyWhiteList(request, studyIdsToQuery);
-        } else {
-            recordItemIter = getDynamoRecordIdSourceWithoutStudyWhiteList(request, studyIdsToQuery);
+        long endEpochTime = endDateTime - 1;
+
+        // We need to make a separate query for _each_ study in the whitelist. That's just how DDB hash keys work.
+        List<Iterable<Item>> recordItemIterList = new ArrayList<>();
+        for (String oneStudyId : studyIdsToQuery.keySet()) {
+            Iterable<Item> recordItemIterTemp = ddbQueryHelper.query(ddbRecordStudyUploadedOnIndex, "studyId", oneStudyId,
+                    new RangeKeyCondition("uploadedOn").between(Long.valueOf(studyIdsToQuery.get(oneStudyId)),
+                            endEpochTime));
+            recordItemIterList.add(recordItemIterTemp);
         }
+        recordItemIter = Iterables.concat(recordItemIterList);
 
         // finally, update studies in export time table
         // right now, the studyIdsToQuery contains all modified study ids
@@ -147,69 +152,6 @@ public class RecordIdSourceFactory {
     }
 
     /**
-     * Used for one-time exporting and any other exporting including study white list.
-     * @param request
-     * @param studyIdsToQuery
-     * @return
-     */
-    private Iterable<Item> getDynamoRecordIdSourceWithStudyWhiteList(BridgeExporterRequest request, Map<String, String> studyIdsToQuery) {
-        DateTime endDateTime = request.getEndDateTime();
-
-        // proceed
-        Iterable<Item> recordItemIter;
-        long endEpochTime = endDateTime.getMillis() - 1;
-
-        // We need to make a separate query for _each_ study in the whitelist. That's just how DDB hash keys work.
-        List<Iterable<Item>> recordItemIterList = new ArrayList<>();
-        for (String oneStudyId : studyIdsToQuery.keySet()) {
-            Iterable<Item> recordItemIterTemp = ddbQueryHelper.query(ddbRecordStudyUploadedOnIndex, "studyId", oneStudyId,
-                    new RangeKeyCondition("uploadedOn").between(Long.valueOf(studyIdsToQuery.get(oneStudyId)),
-                            endEpochTime));
-            recordItemIterList.add(recordItemIterTemp);
-        }
-        recordItemIter = Iterables.concat(recordItemIterList);
-
-        return recordItemIter;
-    }
-
-    /**
-     * Only used for daily exporting
-     * @param request
-     * @return
-     */
-    private Iterable<Item> getDynamoRecordIdSourceWithoutStudyWhiteList(BridgeExporterRequest request, Map<String, String> studyIdsToQuery) {
-        DateTime endDateTime = request.getEndDateTime();
-        DateTime startDateTime = request.getStartDateTime();
-
-        // proceed
-        Iterable<Item> recordItemIter;
-
-        // always query a list of records within given time range
-        recordItemIter = ddbQueryHelper.query(ddbRecordUploadDateIndex, "uploadDate",
-                request.getDate().toString());
-
-        List<Item> retRecordItems = new ArrayList<>();
-
-        // for each study, check last export date time
-        for (Item recordItem : recordItemIter) {
-            String studyId = recordItem.getString(STUDY_ID);
-            if (!studyIdsToQuery.containsKey(studyId)) {
-                studyIdsToQuery.put(studyId, String.valueOf(startDateTime.getMillis()));
-            }
-
-            // filter as well
-            DateTime uploadedOn = new DateTime(recordItem.getLong(UPLOADED_ON), timeZone);
-            // exclusive end date time
-            Interval dateTimeRange = new Interval(new DateTime(Long.valueOf(studyIdsToQuery.get(studyId)), timeZone), endDateTime);
-            if (dateTimeRange.contains(uploadedOn)) {
-                retRecordItems.add(recordItem);
-            }
-        }
-
-        return retRecordItems;
-    }
-
-    /**
      * Helper method to generate study ids for query
      * @param request
      * @return
@@ -217,37 +159,33 @@ public class RecordIdSourceFactory {
     private Map<String, String> bootstrapStudyIdsToQuery(BridgeExporterRequest request) {
         DateTime startDateTime = request.getStartDateTime();
 
-        Map<String, String> studyIdWithLastExportDateTime = new HashMap<>();
+        List<String> studyIdList = new ArrayList<>();
 
-        // only if the request is not a re-export needs it to look up ddb table
-        if (request.getStudyWhitelist() == null && !request.getReExport()) {
-            // get the export time table from ddb as a whole
+        if (request.getStudyWhitelist() == null) {
+            // get the study id list from ddb table
             ScanRequest scanRequest = new ScanRequest()
-                    .withTableName(ddbExportTimeTable.getTableName());
+                    .withTableName(ddbStudyTable.getTableName());
 
             ScanResult result = ddbClientScan.scan(scanRequest);
 
-            // convert the list of map to a map with key is studyid and value is lastExportDateTime
             for (Map<String, AttributeValue> item : result.getItems()) {
-                studyIdWithLastExportDateTime.put(item.get(STUDY_ID).getS(), item.get(LAST_EXPORT_DATE_TIME).getN());
-            }
-        }
-
-        Map<String, String> studyIdsToQuery = new TreeMap<>();
-
-        // then, check if it has study white list
-        if (request.getStudyWhitelist() != null) {
-            for (String studyId : request.getStudyWhitelist()) {
-                Item studyIdItem = ddbExportTimeTable.getItem(STUDY_ID, studyId);
-                if (studyIdItem != null && !request.getReExport()) {
-                    studyIdsToQuery.put(studyId, String.valueOf(studyIdItem.getLong(LAST_EXPORT_DATE_TIME)));
-                } else {
-                    // bootstrap with the startDateTime in request
-                    studyIdsToQuery.put(studyId, String.valueOf(startDateTime.getMillis()));
-                }
+                studyIdList.add(item.get(IDENTIFIER).getS());
             }
         } else {
-            studyIdsToQuery.putAll(studyIdWithLastExportDateTime);
+            studyIdList.addAll(request.getStudyWhitelist());
+        }
+
+        // maintain insert order for testing
+        Map<String, String> studyIdsToQuery = new LinkedHashMap<>();
+
+        for (String studyId : studyIdList) {
+            Item studyIdItem = ddbExportTimeTable.getItem(STUDY_ID, studyId);
+            if (studyIdItem != null && !request.getReExport()) {
+                studyIdsToQuery.put(studyId, String.valueOf(studyIdItem.getLong(LAST_EXPORT_DATE_TIME)));
+            } else {
+                // bootstrap with the startDateTime in request
+                studyIdsToQuery.put(studyId, String.valueOf(startDateTime.getMillis()));
+            }
         }
 
         return studyIdsToQuery;
