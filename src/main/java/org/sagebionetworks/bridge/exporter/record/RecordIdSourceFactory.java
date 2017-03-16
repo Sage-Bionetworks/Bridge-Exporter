@@ -39,7 +39,6 @@ public class RecordIdSourceFactory {
     static final String STUDY_ID = "studyId";
     static final String IDENTIFIER = "identifier";
     static final String LAST_EXPORT_DATE_TIME = "lastExportDateTime";
-    static final String UPLOADED_ON = "uploadedOn";
 
     // config vars
     private String overrideBucket;
