@@ -34,12 +34,13 @@ public class BridgeExporterRequest {
     private final Map<String, String> synapseProjectOverrideMap;
     private final Set<UploadSchemaKey> tableWhitelist;
     private final String tag;
+    private final boolean reExport;
 
     /** Private constructor. To build, go through the builder. */
     private BridgeExporterRequest(LocalDate date, DateTime endDateTime, String exporterDdbPrefixOverride,
             String recordIdS3Override, int redriveCount, BridgeExporterSharingMode sharingMode, DateTime startDateTime,
             Set<String> studyWhitelist, Map<String, String> synapseProjectOverrideMap,
-            Set<UploadSchemaKey> tableWhitelist, String tag) {
+            Set<UploadSchemaKey> tableWhitelist, String tag, boolean reExport) {
         this.date = date;
         this.endDateTime = endDateTime;
         this.exporterDdbPrefixOverride = exporterDdbPrefixOverride;
@@ -51,6 +52,7 @@ public class BridgeExporterRequest {
         this.synapseProjectOverrideMap = synapseProjectOverrideMap;
         this.tableWhitelist = tableWhitelist;
         this.tag = tag;
+        this.reExport = reExport;
     }
 
     /**
@@ -149,6 +151,10 @@ public class BridgeExporterRequest {
         return tag;
     }
 
+    public boolean getReExport() {
+        return this.reExport;
+    }
+
     @Override
     public final boolean equals(Object o) {
         if (this == o) {
@@ -168,13 +174,14 @@ public class BridgeExporterRequest {
                 Objects.equals(studyWhitelist, that.studyWhitelist) &&
                 Objects.equals(synapseProjectOverrideMap, that.synapseProjectOverrideMap) &&
                 Objects.equals(tableWhitelist, that.tableWhitelist) &&
-                Objects.equals(tag, that.tag);
+                Objects.equals(tag, that.tag) &&
+                Objects.equals(reExport, that.reExport);
     }
 
     @Override
     public final int hashCode() {
         return Objects.hash(date, endDateTime, exporterDdbPrefixOverride, recordIdS3Override, redriveCount, sharingMode,
-                startDateTime, studyWhitelist, synapseProjectOverrideMap, tableWhitelist, tag);
+                startDateTime, studyWhitelist, synapseProjectOverrideMap, tableWhitelist, tag, reExport);
     }
 
     /**
@@ -208,6 +215,9 @@ public class BridgeExporterRequest {
         stringBuilder.append(", tag=");
         stringBuilder.append(tag);
 
+        stringBuilder.append(", re-export=");
+        stringBuilder.append(reExport);
+
         return stringBuilder.toString();
     }
 
@@ -224,6 +234,7 @@ public class BridgeExporterRequest {
         private Map<String, String> synapseProjectOverrideMap;
         private Set<UploadSchemaKey> tableWhitelist;
         private String tag;
+        private boolean reExport;
 
         /** Sets the builder with a copy of the given request. */
         public Builder copyOf(BridgeExporterRequest other) {
@@ -239,6 +250,7 @@ public class BridgeExporterRequest {
             synapseProjectOverrideMap = other.synapseProjectOverrideMap;
             tableWhitelist = other.tableWhitelist;
             tag = other.tag;
+            reExport = other.reExport;
             return this;
         }
 
@@ -311,38 +323,42 @@ public class BridgeExporterRequest {
             return this;
         }
 
+        public Builder withReExport(boolean reExport) {
+            this.reExport = reExport;
+            return this;
+        }
+
         /** Builds a Bridge EX request object and validates all parameters. */
         public BridgeExporterRequest build() {
-            // startDateTime and endDateTime must be both specified or both absent.
+            // startDateTime and endDateTime must be specified for request without override.
             boolean hasStartDateTime = startDateTime != null;
             boolean hasEndDateTime = endDateTime != null;
             if (hasStartDateTime ^ hasEndDateTime) {
-                throw new IllegalStateException("startDateTime and endDateTime must both be specified or both be " +
-                        "absent.");
+                throw new IllegalStateException("startDateTime and endDateTime must both be specified if one exists.");
             }
             if (hasStartDateTime && !startDateTime.isBefore(endDateTime)) {
                 throw new IllegalStateException("startDateTime must be before endDateTime.");
             }
 
-            // If start/endDateTime are specified, there must be a studyWhitelist.
-            if (hasStartDateTime && studyWhitelist == null) {
-                throw new IllegalStateException("If start- and endDateTime are specified, studyWhitelist must also " +
-                        "be specified.");
+            // if both datetime range and date exists, they must be in the same date
+            if (hasStartDateTime && this.date != null) {
+                LocalDate startDate = this.startDateTime.toLocalDate();
+                LocalDate endDate = this.endDateTime.toLocalDate();
+                if (!(this.date.isEqual(startDate) && startDate.isEqual(endDate))) {
+                    throw new IllegalStateException("Date, startDateTime and endDateTime must be in the same date.");
+                }
             }
 
             // Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.
             int numRecordSources = 0;
-            if (hasStartDateTime) {
-                numRecordSources++;
-            }
-            if (date != null) {
+            if (hasStartDateTime || date != null) {
                 numRecordSources++;
             }
             if (StringUtils.isNotBlank(recordIdS3Override)) {
                 numRecordSources++;
             }
             if (numRecordSources != 1) {
-                throw new IllegalStateException("Exactly one of date, start/endDateTime, and recordIdS3Override must" +
+                throw new IllegalStateException("Exactly one of date/start/endDateTime, and recordIdS3Override must" +
                         " be specified.");
             }
 
@@ -391,7 +407,7 @@ public class BridgeExporterRequest {
 
             return new BridgeExporterRequest(date, endDateTime, exporterDdbPrefixOverride, recordIdS3Override,
                     redriveCount, sharingMode, startDateTime, studyWhitelist, synapseProjectOverrideMap,
-                    tableWhitelist, tag);
+                    tableWhitelist, tag, reExport);
         }
     }
 }
