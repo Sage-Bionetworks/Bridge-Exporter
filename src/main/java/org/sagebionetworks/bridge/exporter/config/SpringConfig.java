@@ -9,19 +9,18 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Index;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.sqs.AmazonSQSClient;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
-import org.sagebionetworks.bridge.exporter.synapse.ColumnDefinition;
-import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.repo.model.table.ColumnModel;
+import org.sagebionetworks.client.SynapseAdminClientImpl;
+import org.sagebionetworks.client.SynapseClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -32,17 +31,17 @@ import org.sagebionetworks.bridge.config.PropertiesConfig;
 import org.sagebionetworks.bridge.dynamodb.DynamoQueryHelper;
 import org.sagebionetworks.bridge.exporter.notification.S3EventNotificationCallback;
 import org.sagebionetworks.bridge.exporter.request.BridgeExporterSqsCallback;
+import org.sagebionetworks.bridge.exporter.synapse.ColumnDefinition;
 import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.heartbeat.HeartbeatLogger;
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.model.ClientInfo;
 import org.sagebionetworks.bridge.rest.model.SignIn;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorker;
 import org.sagebionetworks.bridge.sqs.SqsHelper;
-import org.sagebionetworks.client.SynapseAdminClientImpl;
-import org.sagebionetworks.client.SynapseClient;
 
 // These configs get credentials from the default credential chain. For developer desktops, this is ~/.aws/credentials.
 // For EC2 instances, this happens transparently.
@@ -136,6 +135,11 @@ public class SpringConfig {
         return ddbClient().getTable(ddbPrefix() + "Study");
     }
 
+    @Bean(name = "ddbExportTimeTable")
+    public Table ddbExportTimeTable() {
+        return ddbClient().getTable(ddbPrefix() + "ExportTime");
+    }
+
     @Bean
     public FileHelper fileHelper() {
         return new FileHelper();
@@ -213,4 +217,10 @@ public class SpringConfig {
 
         return ImmutableList.copyOf(value);
     }
+
+    @Bean(name = "ddbClientScan")
+    public AmazonDynamoDBClient ddbClientScan() {
+        return new AmazonDynamoDBClient(new ProfileCredentialsProvider());
+    }
+
 }

@@ -41,8 +41,7 @@ public class BridgeExporterSqsCallbackTest {
                 {
                         "{\n"
                         + "     \"date\":\"2016-08-12\",\n"
-                        + "     \"startDateTime\":\"2016-08-12T0:00-0700\",\n"
-                        + "     \"endDateTime\":\"2016-08-13T0:00-0700\",\n"
+                        + "     \"exportType\":\"DAILY\",\n"
                         + "     \"tag\":\"invalid request\"\n"
                         + "}"
                 },

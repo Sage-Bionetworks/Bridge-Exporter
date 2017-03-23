@@ -2,13 +2,21 @@ package org.sagebionetworks.bridge.exporter.record;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.Resource;
 
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.Index;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.RangeKeyCondition;
+import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.ScanRequest;
+import com.amazonaws.services.dynamodbv2.model.ScanResult;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import org.apache.commons.lang.StringUtils;
 import org.joda.time.DateTime;
@@ -31,6 +39,9 @@ import org.sagebionetworks.bridge.s3.S3Helper;
 public class RecordIdSourceFactory {
     private static final RecordIdSource.Converter<Item> DYNAMO_ITEM_CONVERTER = from -> from.getString("id");
     private static final RecordIdSource.Converter<String> NOOP_CONVERTER = from -> from;
+    static final String STUDY_ID = "studyId";
+    static final String IDENTIFIER = "identifier";
+    static final String LAST_EXPORT_DATE_TIME = "lastExportDateTime";
 
     // config vars
     private String overrideBucket;
@@ -41,6 +52,9 @@ public class RecordIdSourceFactory {
     private Index ddbRecordStudyUploadedOnIndex;
     private Index ddbRecordUploadDateIndex;
     private S3Helper s3Helper;
+    private Table ddbExportTimeTable;
+    private Table ddbStudyTable;
+    private AmazonDynamoDBClient ddbClientScan;
 
     /** Config, used to get S3 bucket for record ID override files. */
     @Autowired
@@ -73,6 +87,22 @@ public class RecordIdSourceFactory {
         this.s3Helper = s3Helper;
     }
 
+    /** DDB Export Time Table. */
+    @Resource(name = "ddbExportTimeTable")
+    final void setDdbExportTimeTable(Table ddbExportTimeTable) {
+        this.ddbExportTimeTable = ddbExportTimeTable;
+    }
+
+    @Resource(name = "ddbStudyTable")
+    public final void setDdbStudyTable(Table ddbStudyTable) {
+        this.ddbStudyTable = ddbStudyTable;
+    }
+
+    @Resource(name = "ddbClientScan")
+    final void setDdbClientScan(AmazonDynamoDBClient ddbClientScan) {
+        this.ddbClientScan = ddbClientScan;
+    }
+
     /**
      * Gets the record ID source for the given Bridge EX request. Returns an Iterable instead of a RecordIdSource for
      * easy mocking.
@@ -83,7 +113,7 @@ public class RecordIdSourceFactory {
      * @throws IOException
      *         if we fail reading the underlying source
      */
-    public Iterable<String> getRecordSourceForRequest(BridgeExporterRequest request) throws IOException {
+    public RecordAndStudyListHolder getRecordSourceForRequest(BridgeExporterRequest request) throws IOException {
         if (StringUtils.isNotBlank(request.getRecordIdS3Override())) {
             return getS3RecordIdSource(request);
         } else if (request.getStudyWhitelist() != null) {
@@ -98,7 +128,7 @@ public class RecordIdSourceFactory {
      * have a date, we'll need to compute the start and endDateTimes based off of that. Otherwise, we use the start-
      * and endDateTimes verbatim.
      */
-    private Iterable<String> getDynamoRecordIdSourceWithStudyWhitelist(BridgeExporterRequest request) {
+    private RecordAndStudyListHolder getDynamoRecordIdSourceWithStudyWhitelist(BridgeExporterRequest request) {
         // Compute start- and endDateTime.
         DateTime startDateTime;
         DateTime endDateTime;
@@ -134,22 +164,74 @@ public class RecordIdSourceFactory {
         }
 
         // Concatenate all the iterables together.
-        return new RecordIdSource<>(Iterables.concat(recordItemIterList), DYNAMO_ITEM_CONVERTER);
+        return new RecordAndStudyListHolder(new RecordIdSource<>(Iterables.concat(recordItemIterList), DYNAMO_ITEM_CONVERTER), bootstrapStudyIdsToQuery(request), getEndDateTime(request));
     }
 
     /** Get the record ID source from a DDB query. */
-    private Iterable<String> getDynamoRecordIdSource(BridgeExporterRequest request) {
+    private RecordAndStudyListHolder getDynamoRecordIdSource(BridgeExporterRequest request) {
         Iterable<Item> recordItemIter = ddbQueryHelper.query(ddbRecordUploadDateIndex, "uploadDate",
                 request.getDate().toString());
-        return new RecordIdSource<>(recordItemIter, DYNAMO_ITEM_CONVERTER);
+        return new RecordAndStudyListHolder(new RecordIdSource<>(recordItemIter, DYNAMO_ITEM_CONVERTER), bootstrapStudyIdsToQuery(request), getEndDateTime(request));
     }
 
     /**
      * Get the record ID source from a record override file in S3. We assume the list of record IDs is small enough to
      * reasonably fit in memory.
      */
-    private Iterable<String> getS3RecordIdSource(BridgeExporterRequest request) throws IOException {
+    private RecordAndStudyListHolder getS3RecordIdSource(BridgeExporterRequest request) throws IOException {
         List<String> recordIdList = s3Helper.readS3FileAsLines(overrideBucket, request.getRecordIdS3Override());
-        return new RecordIdSource<>(recordIdList, NOOP_CONVERTER);
+        return new RecordAndStudyListHolder(new RecordIdSource<>(recordIdList, NOOP_CONVERTER), ImmutableMap.of(), DateTime.now());
     }
+
+    private DateTime getEndDateTime(BridgeExporterRequest request) {
+        ExportType exportType = request.getExportType();
+
+        if (exportType == ExportType.INSTANT) {
+            // set end date time to 1 min ago to avoid clock skew issue for instant export
+            return DateTime.now().minusMinutes(1);
+        } else {
+            return request.getEndDateTime();
+        }
+    }
+
+    /**
+     * Helper method to generate study ids for query
+     * @param request
+     * @return
+     */
+    private Map<String, DateTime> bootstrapStudyIdsToQuery(BridgeExporterRequest request) {
+        DateTime endDateTime = getEndDateTime(request);
+        List<String> studyIdList = new ArrayList<>();
+
+        if (request.getStudyWhitelist() == null) {
+            // get the study id list from ddb table
+            ScanRequest scanRequest = new ScanRequest()
+                    .withTableName(ddbStudyTable.getTableName());
+
+            ScanResult result = ddbClientScan.scan(scanRequest);
+
+            for (Map<String, AttributeValue> item : result.getItems()) {
+                studyIdList.add(item.get(IDENTIFIER).getS());
+            }
+        } else {
+            studyIdList.addAll(request.getStudyWhitelist());
+        }
+
+        // maintain insert order for testing
+        Map<String, DateTime> studyIdsToQuery = new LinkedHashMap<>();
+
+        for (String studyId : studyIdList) {
+            Item studyIdItem = ddbExportTimeTable.getItem(STUDY_ID, studyId);
+            if (studyIdItem != null && !request.getIgnoreLastExportTime()) {
+                studyIdsToQuery.put(studyId, new DateTime(studyIdItem.getLong(LAST_EXPORT_DATE_TIME), timeZone));
+            } else {
+                // bootstrap startDateTime with the exportType in request
+                ExportType exportType = request.getExportType();
+                studyIdsToQuery.put(studyId, exportType.getStartDateTime(endDateTime));
+            }
+        }
+
+        return studyIdsToQuery;
+    }
+
 }
