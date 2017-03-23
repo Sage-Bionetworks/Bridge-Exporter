@@ -18,6 +18,7 @@ import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.testng.annotations.Test;
 
+import org.sagebionetworks.bridge.exporter.record.ExportType;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 
@@ -48,7 +49,7 @@ public class BridgeExporterRequestTest {
         assertEquals(request.getSharingMode(), BridgeExporterSharingMode.SHARED);
 
         // test toString
-        assertEquals(request.toString(), "date=" + TEST_DATE + ", redriveCount=0, tag=null");
+        assertEquals(request.toString(), "date=" + TEST_DATE + ", redriveCount=0, tag=null, ignoreLastExportTime=false, exportType=null");
 
         // test copy
         BridgeExporterRequest copy = new BridgeExporterRequest.Builder().copyOf(request).build();
@@ -66,7 +67,7 @@ public class BridgeExporterRequestTest {
 
         // test toString
         assertEquals(request.toString(), "startDateTime=" + START_DATE_TIME + ", endDateTime=" + END_DATE_TIME
-                + ", redriveCount=0, tag=null");
+                + ", redriveCount=0, tag=null, ignoreLastExportTime=false, exportType=null");
 
         // test copy
         BridgeExporterRequest copy = new BridgeExporterRequest.Builder().copyOf(request).build();
@@ -81,7 +82,7 @@ public class BridgeExporterRequestTest {
         assertEquals(request.getSharingMode(), BridgeExporterSharingMode.SHARED);
 
         // test toString
-        assertEquals(request.toString(), "recordIdS3Override=" + TEST_RECORD_OVERRIDE + ", redriveCount=0, tag=null");
+        assertEquals(request.toString(), "recordIdS3Override=" + TEST_RECORD_OVERRIDE + ", redriveCount=0, tag=null, ignoreLastExportTime=false, exportType=null");
 
         // test copy
         BridgeExporterRequest copy = new BridgeExporterRequest.Builder().copyOf(request).build();
@@ -133,11 +134,25 @@ public class BridgeExporterRequestTest {
         assertFalse(request.getTableWhitelist().contains(TEST_SCHEMA_KEY));
 
         // test toString
-        assertEquals(request.toString(), "date=" + TEST_DATE + ", redriveCount=1, tag=" + TEST_TAG);
+        assertEquals(request.toString(), "date=" + TEST_DATE + ", redriveCount=1, tag=" + TEST_TAG + ", ignoreLastExportTime=false, exportType=null");
 
         // test copy
         BridgeExporterRequest copy = new BridgeExporterRequest.Builder().copyOf(request).build();
         assertEquals(copy, request);
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "Must specify endDateTime for daily or hourly export.")
+    public void dailyExportWithoutEndDateTime() {
+        new BridgeExporterRequest.Builder().withExportType(ExportType.DAILY)
+                .build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "Must specify endDateTime for daily or hourly export.")
+    public void hourlyExportWithoutEndDateTime() {
+        new BridgeExporterRequest.Builder().withExportType(ExportType.HOURLY)
+                .build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
@@ -169,13 +184,7 @@ public class BridgeExporterRequestTest {
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "If start- and endDateTime are specified, studyWhitelist must also be specified.")
-    public void startAndEndDateWithoutStudyWhitelist() {
-        new BridgeExporterRequest.Builder().withStartDateTime(START_DATE_TIME).withEndDateTime(END_DATE_TIME).build();
-    }
-
-    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
     public void withAll3RecordSources() {
         new BridgeExporterRequest.Builder().withDate(TEST_DATE).withStartDateTime(START_DATE_TIME)
                 .withEndDateTime(END_DATE_TIME).withRecordIdS3Override(TEST_RECORD_OVERRIDE)
@@ -183,39 +192,32 @@ public class BridgeExporterRequestTest {
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
-    public void withDateAndStartAndEndDate() {
-        new BridgeExporterRequest.Builder().withDate(TEST_DATE).withStartDateTime(START_DATE_TIME)
-                .withEndDateTime(END_DATE_TIME).withStudyWhitelist(STUDY_WHITELIST).build();
-    }
-
-    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
     public void withStartAndEndDateAndRecordOverride() {
         new BridgeExporterRequest.Builder().withStartDateTime(START_DATE_TIME).withEndDateTime(END_DATE_TIME)
                 .withRecordIdS3Override(TEST_RECORD_OVERRIDE).withStudyWhitelist(STUDY_WHITELIST).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
     public void withBothDateAndRecordOverride() {
         new BridgeExporterRequest.Builder().withDate(TEST_DATE).withRecordIdS3Override(TEST_RECORD_OVERRIDE).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
     public void withNoRecordSources() {
         new BridgeExporterRequest.Builder().build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
     public void emptyRecordOverride() {
         new BridgeExporterRequest.Builder().withRecordIdS3Override("").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "Exactly one of date, start/endDateTime, and recordIdS3Override must be specified.")
+            "Exactly one of date/start/endDateTime, and recordIdS3Override must be specified.")
     public void blankRecordOverride() {
         new BridgeExporterRequest.Builder().withRecordIdS3Override("   ").build();
     }

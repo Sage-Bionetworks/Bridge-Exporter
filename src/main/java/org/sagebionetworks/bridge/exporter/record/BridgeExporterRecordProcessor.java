@@ -2,13 +2,14 @@ package org.sagebionetworks.bridge.exporter.record;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import javax.annotation.Resource;
 
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.google.common.base.Stopwatch;
+import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.client.exceptions.SynapseException;
@@ -43,6 +44,8 @@ public class BridgeExporterRecordProcessor {
     // package-scoped to be available to unit tests
     static final String CONFIG_KEY_RECORD_LOOP_DELAY_MILLIS = "record.loop.delay.millis";
     static final String CONFIG_KEY_RECORD_LOOP_PROGRESS_REPORT_PERIOD = "record.loop.progress.report.period";
+    static final String STUDY_ID = "studyId";
+    static final String LAST_EXPORT_DATE_TIME = "lastExportDateTime";
 
     // config attributes
     private int delayMillis;
@@ -51,6 +54,7 @@ public class BridgeExporterRecordProcessor {
 
     // Spring helpers
     private Table ddbRecordTable;
+    private Table ddbExportTimeTable;
     private FileHelper fileHelper;
     private MetricsHelper metricsHelper;
     private RecordFilterHelper recordFilterHelper;
@@ -70,6 +74,12 @@ public class BridgeExporterRecordProcessor {
     @Resource(name = "ddbRecordTable")
     public final void setDdbRecordTable(Table ddbRecordTable) {
         this.ddbRecordTable = ddbRecordTable;
+    }
+
+    /** DDB Export Time Table. */
+    @Resource(name = "ddbExportTimeTable")
+    final void setDdbExportTimeTable(Table ddbExportTimeTable) {
+        this.ddbExportTimeTable = ddbExportTimeTable;
     }
 
     /** File helper, used for creating and cleaning up the temp dir used to store the request's temporary files. */
@@ -147,7 +157,11 @@ public class BridgeExporterRecordProcessor {
 
         Stopwatch stopwatch = Stopwatch.createStarted();
         try {
-            Iterable<String> recordIdIterable = recordIdSourceFactory.getRecordSourceForRequest(request);
+            RecordAndStudyListHolder recordAndStudyListHolder = recordIdSourceFactory.getRecordSourceForRequest(request);
+            Iterable<String> recordIdIterable = recordAndStudyListHolder.getRecordIdSource();
+            Map<String, DateTime> studyIdsToUpdate = recordAndStudyListHolder.getStudyIdsToQuery();
+            long endDateTimeEpoch = recordAndStudyListHolder.getEndDateTime().getMillis();
+
             for (String oneRecordId : recordIdIterable) {
                 // Count total number of records. Also, log at regular intervals, so people tailing the logs can follow
                 // progress.
@@ -193,6 +207,13 @@ public class BridgeExporterRecordProcessor {
 
             // We made it to the end. Set the success flag on the task.
             setTaskSuccess(task);
+
+            // update ddb exportTimeTable
+            if (!studyIdsToUpdate.isEmpty()) {
+                for (String studyId: studyIdsToUpdate.keySet()) {
+                    ddbExportTimeTable.putItem(new Item().withPrimaryKey(STUDY_ID, studyId).withNumber(LAST_EXPORT_DATE_TIME, endDateTimeEpoch));
+                }
+            }
         } finally {
             long elapsedTime = stopwatch.elapsed(TimeUnit.SECONDS);
             if (task.isSuccess()) {
