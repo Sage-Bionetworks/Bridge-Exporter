@@ -16,6 +16,7 @@ import java.io.File;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Multiset;
+import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.BeforeMethod;
@@ -27,6 +28,7 @@ import org.sagebionetworks.bridge.exporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.exporter.helper.BridgeHelperTest;
 import org.sagebionetworks.bridge.exporter.helper.ExportHelper;
 import org.sagebionetworks.bridge.exporter.metrics.Metrics;
+import org.sagebionetworks.bridge.exporter.record.ExportType;
 import org.sagebionetworks.bridge.exporter.request.BridgeExporterRequest;
 import org.sagebionetworks.bridge.exporter.worker.ExportSubtask;
 import org.sagebionetworks.bridge.exporter.worker.ExportTask;
@@ -43,8 +45,9 @@ public class IosSurveyExportHandlerTest {
 
     // These are only needed to ensure valid tasks and subtasks.
     private static final LocalDate DUMMY_REQUEST_DATE = LocalDate.parse("2015-10-31");
+    private static final DateTime DUMMY_REQUEST_DATE_TIME = DateTime.parse("2015-10-31T23:59:59Z");
     private static final BridgeExporterRequest DUMMY_REQUEST = new BridgeExporterRequest.Builder()
-            .withDate(DUMMY_REQUEST_DATE).build();
+            .withEndDateTime(DUMMY_REQUEST_DATE_TIME).withExportType(ExportType.DAILY).build();
     private static final String TEST_STUDY_ID = "testStudy";
     private static final UploadSchemaKey SCHEMA_KEY_PLACEHOLDER = new UploadSchemaKey.Builder()
             .withStudyId(TEST_STUDY_ID).withSchemaId("ios-survey").withRevision(1).build();

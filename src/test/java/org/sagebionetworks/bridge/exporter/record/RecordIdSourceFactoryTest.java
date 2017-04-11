@@ -4,19 +4,19 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.sagebionetworks.bridge.exporter.record.RecordIdSourceFactory.STUDY_ID;
 import static org.testng.Assert.assertEquals;
 
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.Map;
 
 import com.amazonaws.services.dynamodbv2.document.Index;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.KeyConditions;
 import com.amazonaws.services.dynamodbv2.document.RangeKeyCondition;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.joda.time.DateTime;
-import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
@@ -27,96 +27,78 @@ import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
 import org.sagebionetworks.bridge.s3.S3Helper;
 
 public class RecordIdSourceFactoryTest {
+    private static final String UPLOAD_START_DATE_TIME = "2015-11-11T00:00:00Z";
+    private static final String UPLOAD_END_DATE_TIME = "2015-11-11T23:59:59Z";
+
+    private static final DateTime UPLOAD_START_DATE_TIME_OBJ = DateTime.parse(UPLOAD_START_DATE_TIME);
+    private static final DateTime UPLOAD_END_DATE_TIME_OBJ = DateTime.parse(UPLOAD_END_DATE_TIME);
+
     @Test
-    public void fromDdb() throws Exception {
-        // mock DDB - The actual table index is just a dummy, since the query helper does all the real work.
-        List<Item> ddbItemList = ImmutableList.of(new Item().withString("id", "ddb-foo"),
-                new Item().withString("id", "ddb-bar"), new Item().withString("id", "ddb-baz"));
-
-        Index mockRecordIndex = mock(Index.class);
-        DynamoQueryHelper mockQueryHelper = mock(DynamoQueryHelper.class);
-        when(mockQueryHelper.query(mockRecordIndex, "uploadDate", "2015-11-11")).thenReturn(ddbItemList);
-
-        // set up factory
-        RecordIdSourceFactory factory = new RecordIdSourceFactory();
-        factory.setDdbQueryHelper(mockQueryHelper);
-        factory.setDdbRecordUploadDateIndex(mockRecordIndex);
-
-        // execute and validate
-        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withDate(LocalDate.parse("2015-11-11"))
-                .build();
-        Iterable<String> recordIdIter = factory.getRecordSourceForRequest(request);
-
-        List<String> recordIdList = ImmutableList.copyOf(recordIdIter);
-        assertEquals(recordIdList.size(), 3);
-        assertEquals(recordIdList.get(0), "ddb-foo");
-        assertEquals(recordIdList.get(1), "ddb-bar");
-        assertEquals(recordIdList.get(2), "ddb-baz");
+    public void fromDdbNormal() throws Exception {
+        fromDdb(false);
     }
 
     @Test
-    public void fromDdbWithWhitelistAndDate() throws Exception {
-        BridgeExporterRequest.Builder requestBuilder = new BridgeExporterRequest.Builder().withDate(LocalDate.parse(
-                "2016-05-09"));
-        fromDdbWithWhitelist(requestBuilder, DateTime.parse("2016-05-09T00:00:00.000-0700").getMillis(),
-                DateTime.parse("2016-05-09T23:59:59.999-0700").getMillis());
+    public void fromDdbEndDateTimeBeforeLastExportTime() throws Exception {
+        fromDdb(true);
     }
 
-    @Test
-    public void fromDdbWithWhitelistAndStartAndEndDateTime() throws Exception {
-        DateTime startDateTime = DateTime.parse("2016-05-09T02:36:19.643-0700");
-        DateTime endDateTime = DateTime.parse("2016-05-09T17:46:32.901-0700");
-
-        BridgeExporterRequest.Builder requestBuilder = new BridgeExporterRequest.Builder()
-                .withStartDateTime(startDateTime).withEndDateTime(endDateTime);
-
-        fromDdbWithWhitelist(requestBuilder, startDateTime.getMillis(), endDateTime.getMillis() - 1);
-    }
-
-    private static void fromDdbWithWhitelist(BridgeExporterRequest.Builder requestBuilder, long expectedStartMillis,
-            long expectedEndMillis) throws Exception {
-        // mock DDB
-        List<Item> barStudyItemList = ImmutableList.of(new Item().withString("id", "bar-1"),
-                new Item().withString("id", "bar-2"));
-        List<Item> fooStudyItemList = ImmutableList.of(new Item().withString("id", "foo-1"),
-                new Item().withString("id", "foo-2"));
+    private static void fromDdb(boolean isEndDateTimeBeforeLastExportTime) throws Exception {
+        // mock map
+        Map<String, DateTime> studyIdsToQuery;
+        if (!isEndDateTimeBeforeLastExportTime) {
+            studyIdsToQuery = ImmutableMap.of("ddb-foo", UPLOAD_START_DATE_TIME_OBJ, "ddb-bar", UPLOAD_START_DATE_TIME_OBJ);
+        } else {
+            studyIdsToQuery = ImmutableMap.of("ddb-foo", UPLOAD_END_DATE_TIME_OBJ, "ddb-bar", UPLOAD_END_DATE_TIME_OBJ);
+        }
 
         Index mockRecordIndex = mock(Index.class);
         DynamoQueryHelper mockQueryHelper = mock(DynamoQueryHelper.class);
 
         ArgumentCaptor<RangeKeyCondition> barRangeKeyCaptor = ArgumentCaptor.forClass(RangeKeyCondition.class);
-        when(mockQueryHelper.query(same(mockRecordIndex), eq("studyId"), eq("bar-study"), barRangeKeyCaptor.capture()))
+        ArgumentCaptor<RangeKeyCondition> fooRangeKeyCaptor = ArgumentCaptor.forClass(RangeKeyCondition.class);
+
+        // mock DDB
+        List<Item> fooStudyItemList = ImmutableList.of(new Item().withString("id", "foo-1"),
+                new Item().withString("id", "foo-2"));
+        List<Item> barStudyItemList = ImmutableList.of(new Item().withString("id", "bar-1"),
+                new Item().withString("id", "bar-2"));
+
+        when(mockQueryHelper.query(same(mockRecordIndex), eq(STUDY_ID), eq("ddb-bar"), barRangeKeyCaptor.capture()))
                 .thenReturn(barStudyItemList);
 
-        ArgumentCaptor<RangeKeyCondition> fooRangeKeyCaptor = ArgumentCaptor.forClass(RangeKeyCondition.class);
-        when(mockQueryHelper.query(same(mockRecordIndex), eq("studyId"), eq("foo-study"), fooRangeKeyCaptor.capture()))
+        when(mockQueryHelper.query(same(mockRecordIndex), eq(STUDY_ID), eq("ddb-foo"), fooRangeKeyCaptor.capture()))
                 .thenReturn(fooStudyItemList);
 
         // set up factory
         RecordIdSourceFactory factory = new RecordIdSourceFactory();
-        factory.setConfig(mockConfig());
         factory.setDdbQueryHelper(mockQueryHelper);
+        factory.setConfig(mockConfig());
         factory.setDdbRecordStudyUploadedOnIndex(mockRecordIndex);
 
-        // finish building request - Use a TreeSet for the study whitelist, so we can get a deterministic test.
-        // (ImmutableSet preserves the iteration order.)
-        Set<String> studyWhitelist = new TreeSet<>();
-        studyWhitelist.add("bar-study");
-        studyWhitelist.add("foo-study");
-        BridgeExporterRequest request = requestBuilder.withStudyWhitelist(studyWhitelist).build();
-
         // execute and validate
-        Iterable<String> recordIdIter = factory.getRecordSourceForRequest(request);
-        List<String> recordIdList = ImmutableList.copyOf(recordIdIter);
-        assertEquals(recordIdList.size(), 4);
-        assertEquals(recordIdList.get(0), "bar-1");
-        assertEquals(recordIdList.get(1), "bar-2");
-        assertEquals(recordIdList.get(2), "foo-1");
-        assertEquals(recordIdList.get(3), "foo-2");
+        BridgeExporterRequest request;
+        request = new BridgeExporterRequest.Builder()
+                .withEndDateTime(UPLOAD_END_DATE_TIME_OBJ)
+                .withExportType(ExportType.DAILY)
+                .build();
 
-        // validate range key queries
-        validateRangeKey(barRangeKeyCaptor.getValue(), expectedStartMillis, expectedEndMillis);
-        validateRangeKey(fooRangeKeyCaptor.getValue(), expectedStartMillis, expectedEndMillis);
+        Iterable<String> recordIdIter = factory.getRecordSourceForRequest(request, UPLOAD_END_DATE_TIME_OBJ, studyIdsToQuery);
+
+        List<String> recordIdList = ImmutableList.copyOf(recordIdIter);
+
+        if (!isEndDateTimeBeforeLastExportTime) {
+            assertEquals(recordIdList.size(), 4); // only output records in given time range
+            assertEquals(recordIdList.get(0), "foo-1");
+            assertEquals(recordIdList.get(1), "foo-2");
+            assertEquals(recordIdList.get(2), "bar-1");
+            assertEquals(recordIdList.get(3), "bar-2");
+
+            validateRangeKey(fooRangeKeyCaptor.getValue(), UPLOAD_START_DATE_TIME_OBJ.getMillis(), UPLOAD_END_DATE_TIME_OBJ.getMillis());
+            validateRangeKey(barRangeKeyCaptor.getValue(), UPLOAD_START_DATE_TIME_OBJ.getMillis(), UPLOAD_END_DATE_TIME_OBJ.getMillis());
+        } else {
+            assertEquals(recordIdList.size(), 4); // only output records in given time range
+        }
     }
 
     private static void validateRangeKey(RangeKeyCondition rangeKey, long expectedStartMillis,
@@ -145,7 +127,7 @@ public class RecordIdSourceFactoryTest {
         // execute and validate
         BridgeExporterRequest request = new BridgeExporterRequest.Builder()
                 .withRecordIdS3Override("dummy-override-file").build();
-        Iterable<String> recordIdIter = factory.getRecordSourceForRequest(request);
+        Iterable<String> recordIdIter = factory.getRecordSourceForRequest(request, UPLOAD_END_DATE_TIME_OBJ, ImmutableMap.of());
 
         List<String> recordIdList = ImmutableList.copyOf(recordIdIter);
         assertEquals(recordIdList.size(), 3);

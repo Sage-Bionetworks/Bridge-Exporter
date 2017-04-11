@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.exporter.exceptions.BridgeExporterException;
+import org.sagebionetworks.bridge.exporter.record.ExportType;
 import org.sagebionetworks.bridge.exporter.request.BridgeExporterRequest;
 import org.sagebionetworks.bridge.exporter.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
@@ -228,17 +229,13 @@ public class ExportHelper {
      * @return
      */
     public DateTime getEndDateTime(BridgeExporterRequest request) {
-        DateTime endDateTime;
-        if (request.getDate() != null) {
-            endDateTime = request.getDate().toDateTimeAtStartOfDay(timeZone)
-                    .withHourOfDay(23).withMinuteOfHour(59).withSecondOfMinute(59).withMillisOfSecond(999);
-        } else if (request.getEndDateTime() != null) {
-            endDateTime = request.getEndDateTime();
-        } else {
-            // s3 override case
-            endDateTime = null;
-        }
+        ExportType exportType = request.getExportType();
 
-        return endDateTime;
+        if (exportType == ExportType.INSTANT) {
+            // set end date time to 1 min ago to avoid clock skew issue for instant export
+            return DateTime.now().minusMinutes(1);
+        } else {
+            return request.getEndDateTime();
+        }
     }
 }

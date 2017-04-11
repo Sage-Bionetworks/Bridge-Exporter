@@ -9,7 +9,7 @@ import static org.testng.Assert.assertTrue;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multiset;
-import org.joda.time.LocalDate;
+import org.joda.time.DateTime;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
@@ -406,7 +406,8 @@ public class RecordFilterHelperTest {
     }
 
     private static BridgeExporterRequest.Builder makeRequestBuilder() {
-        return new BridgeExporterRequest.Builder().withDate(LocalDate.parse("2015-11-05"))
+        DateTime DUMMY_REQUEST_DATE_TIME = DateTime.parse("2015-10-31T23:59:59Z");
+        return new BridgeExporterRequest.Builder().withEndDateTime(DUMMY_REQUEST_DATE_TIME).withExportType(ExportType.DAILY)
                 .withTag("RecordFilterHelperTest");
     }
 }

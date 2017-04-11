@@ -14,11 +14,15 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
 import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeUtils;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.config.Config;
+import org.sagebionetworks.bridge.exporter.record.ExportType;
 import org.sagebionetworks.bridge.exporter.request.BridgeExporterRequest;
 import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
 import org.sagebionetworks.bridge.s3.S3Helper;
@@ -35,6 +39,16 @@ public class ExportHelperTest {
     private static final DateTime UPLOAD_START_DATE_TIME_OBJ = DateTime.parse(UPLOAD_START_DATE_TIME);
     private static final DateTime UPLOAD_END_DATE_TIME_OBJ = DateTime.parse(UPLOAD_END_DATE_TIME);
     private static final LocalDate UPLOAD_DATE_OBJ = LocalDate.parse(UPLOAD_DATE);
+
+    @BeforeClass
+    public void mockTime() {
+        DateTimeUtils.setCurrentMillisFixed(UPLOAD_END_DATE_TIME_OBJ.getMillis());
+    }
+
+    @AfterClass
+    public void cleanupTime() {
+        DateTimeUtils.setCurrentMillisSystem();
+    }
 
     @Test
     public void uploadFreeformText() throws Exception {
@@ -87,19 +101,30 @@ public class ExportHelperTest {
         exportHelper.setConfig(mockConfig);
 
         // DAILY
-        request = new BridgeExporterRequest.Builder().withDate(UPLOAD_DATE_OBJ).build();
+        request = new BridgeExporterRequest.Builder().withEndDateTime(UPLOAD_END_DATE_TIME_OBJ).withExportType(
+                ExportType.DAILY).build();
         endDateTime = exportHelper.getEndDateTime(request);
 
         assertEquals(endDateTime.getMillis(), UPLOAD_END_DATE_TIME_OBJ.getMillis());
 
         // HOURLY
-        request = new BridgeExporterRequest.Builder().withStartDateTime(UPLOAD_START_DATE_TIME_OBJ)
+        request = new BridgeExporterRequest.Builder()
                 .withEndDateTime(UPLOAD_END_DATE_TIME_OBJ)
+                .withExportType(ExportType.HOURLY)
                 .withStudyWhitelist(ImmutableSet.of("dummy-whitelist"))
                 .build();
         endDateTime = exportHelper.getEndDateTime(request);
 
         assertEquals(endDateTime.getMillis(), UPLOAD_END_DATE_TIME_OBJ.getMillis());
+
+        // INSTANT
+        request = new BridgeExporterRequest.Builder()
+                .withExportType(ExportType.INSTANT)
+                .withStudyWhitelist(ImmutableSet.of("dummy-whitelist"))
+                .build();
+        endDateTime = exportHelper.getEndDateTime(request);
+
+        assertEquals(endDateTime.getMillis(), UPLOAD_END_DATE_TIME_OBJ.minusMinutes(1).getMillis());
 
         // s3 override
         request = new BridgeExporterRequest.Builder().withRecordIdS3Override("dummy-override").build();

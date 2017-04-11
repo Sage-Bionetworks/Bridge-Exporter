@@ -46,6 +46,7 @@ import org.sagebionetworks.bridge.exporter.handler.AppVersionExportHandler;
 import org.sagebionetworks.bridge.exporter.handler.HealthDataExportHandler;
 import org.sagebionetworks.bridge.exporter.handler.SynapseExportHandler;
 import org.sagebionetworks.bridge.exporter.metrics.Metrics;
+import org.sagebionetworks.bridge.exporter.record.ExportType;
 import org.sagebionetworks.bridge.exporter.request.BridgeExporterRequest;
 import org.sagebionetworks.bridge.exporter.synapse.SynapseStatusTableHelper;
 import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
@@ -57,8 +58,9 @@ import org.sagebionetworks.bridge.sqs.SqsHelper;
 public class ExportWorkerManagerEndOfStreamTest {
     private static final String DUMMY_JSON_TEXT = "{\"key\":\"value\"}";
     private static final String DUMMY_RECORD_ID_OVERRIDE_BUCKET = "dummy-bucket";
+    private static final DateTime DUMMY_REQUEST_DATE_TIME = DateTime.parse("2015-12-08T23:59:59Z");
     private static final BridgeExporterRequest DUMMY_REQUEST = new BridgeExporterRequest.Builder()
-            .withDate(LocalDate.parse("2015-12-08")).withTag("test tag").build();
+            .withEndDateTime(DUMMY_REQUEST_DATE_TIME).withExportType(ExportType.DAILY).withTag("test tag").build();
 
     private static final String DUMMY_SQS_QUEUE_URL = "dummy-sqs-url";
 
@@ -214,7 +216,8 @@ public class ExportWorkerManagerEndOfStreamTest {
         // Create task. We'll want to use a real task here, since it tracks state that we need to test.
         // Study whitelist is mainly there to make sure we're copying over request params to our redrives.
         Set<String> studyWhitelist = ImmutableSet.of("study-A", "study-B", "study-C", "study-D", "study-Z");
-        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withDate(LocalDate.parse("2015-12-08"))
+        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withEndDateTime(DUMMY_REQUEST_DATE_TIME)
+                .withExportType(ExportType.DAILY)
                 .withTag("test tag").withStudyWhitelist(studyWhitelist).build();
         ExportTask task = new ExportTask.Builder().withExporterDate(LocalDate.parse("2015-12-09"))
                 .withMetrics(new Metrics()).withRequest(request).withTmpDir(mock(File.class)).build();
@@ -269,8 +272,6 @@ public class ExportWorkerManagerEndOfStreamTest {
         List<BridgeExporterRequest> redriveRequestList = redriveRequestCaptor.getAllValues();
 
         BridgeExporterRequest redriveRecordRequest = redriveRequestList.get(0);
-        assertNull(redriveRecordRequest.getDate());
-        assertNull(redriveRecordRequest.getStartDateTime());
         assertNull(redriveRecordRequest.getEndDateTime());
         assertEquals(redriveRecordRequest.getRecordIdS3Override(), "redrive-record-ids.2016-08-16T01:30:00.001Z");
         assertEquals(redriveRecordRequest.getRedriveCount(), 1);
@@ -278,7 +279,6 @@ public class ExportWorkerManagerEndOfStreamTest {
         assertEquals(redriveRecordRequest.getTag(), ExportWorkerManager.REDRIVE_TAG_PREFIX + request.getTag());
 
         BridgeExporterRequest redriveTableRequest = redriveRequestList.get(1);
-        assertEquals(redriveTableRequest.getDate(), request.getDate());
         assertEquals(redriveTableRequest.getRedriveCount(), 1);
         assertEquals(redriveTableRequest.getStudyWhitelist(), request.getStudyWhitelist());
         assertEquals(redriveTableRequest.getTag(), ExportWorkerManager.REDRIVE_TAG_PREFIX + request.getTag());
@@ -316,7 +316,8 @@ public class ExportWorkerManagerEndOfStreamTest {
 
         // Create request and task. Minimal request needs date (required), as well as redriveCount and tag (part of our
         // test).
-        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withDate(LocalDate.parse("2015-12-08"))
+        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withEndDateTime(DUMMY_REQUEST_DATE_TIME)
+                .withExportType(ExportType.DAILY)
                 .withTag(ExportWorkerManager.REDRIVE_TAG_PREFIX + "redrive test").withRedriveCount(1).build();
         ExportTask task = new ExportTask.Builder().withExporterDate(LocalDate.parse("2015-12-09"))
                 .withMetrics(new Metrics()).withRequest(request).withTmpDir(mock(File.class)).build();
@@ -344,7 +345,6 @@ public class ExportWorkerManagerEndOfStreamTest {
         assertEquals(redriveRecordRequest.getTag(), request.getTag());
 
         BridgeExporterRequest redriveTableRequest = redriveRequestList.get(1);
-        assertEquals(redriveTableRequest.getDate(), request.getDate());
         assertEquals(redriveTableRequest.getRedriveCount(), 2);
         assertEquals(redriveTableRequest.getTag(), request.getTag());
 
@@ -371,7 +371,8 @@ public class ExportWorkerManagerEndOfStreamTest {
 
         // Create request and task. Minimal request needs date (required), as well as redriveCount and tag (part of our
         // test).
-        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withDate(LocalDate.parse("2015-12-08"))
+        BridgeExporterRequest request = new BridgeExporterRequest.Builder().withEndDateTime(DUMMY_REQUEST_DATE_TIME)
+                .withExportType(ExportType.DAILY)
                 .withTag(ExportWorkerManager.REDRIVE_TAG_PREFIX + "redrive test").withRedriveCount(2).build();
         ExportTask task = new ExportTask.Builder().withExporterDate(LocalDate.parse("2015-12-09"))
                 .withMetrics(new Metrics()).withRequest(request).withTmpDir(mock(File.class)).build();

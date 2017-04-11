@@ -2,7 +2,8 @@ package org.sagebionetworks.bridge.exporter.record;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Resource;
 
@@ -163,7 +164,10 @@ public class BridgeExporterRecordProcessor {
 
         Stopwatch stopwatch = Stopwatch.createStarted();
         try {
-            Iterable<String> recordIdIterable = recordIdSourceFactory.getRecordSourceForRequest(request);
+            DateTime endDateTime = exportHelper.getEndDateTime(request);
+            Map<String, DateTime> studyIdsToQuery = dynamoHelper.bootstrapStudyIdsToQuery(request, endDateTime);
+
+            Iterable<String> recordIdIterable = recordIdSourceFactory.getRecordSourceForRequest(request, endDateTime, studyIdsToQuery);
             for (String oneRecordId : recordIdIterable) {
                 // Count total number of records. Also, log at regular intervals, so people tailing the logs can follow
                 // progress.
@@ -211,9 +215,9 @@ public class BridgeExporterRecordProcessor {
             setTaskSuccess(task);
 
             // finally modify export time table in ddb
-            DateTime endDateTime = exportHelper.getEndDateTime(request);
-            List<String> studyIdsToUpdate = dynamoHelper.bootstrapStudyIdsToQuery(request, endDateTime);
-            dynamoHelper.updateExportTimeTable(studyIdsToUpdate, endDateTime);
+            if (!request.getIgnoreLastExportTime()) {
+                dynamoHelper.updateExportTimeTable(new ArrayList<>(studyIdsToQuery.keySet()), endDateTime);
+            }
         } finally {
             long elapsedTime = stopwatch.elapsed(TimeUnit.SECONDS);
             if (task.isSuccess()) {

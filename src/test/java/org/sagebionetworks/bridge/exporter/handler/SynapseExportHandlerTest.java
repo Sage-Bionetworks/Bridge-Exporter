@@ -1,47 +1,6 @@
 package org.sagebionetworks.bridge.exporter.handler;
 
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
-import com.amazonaws.services.dynamodbv2.document.Item;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multiset;
-import com.google.common.collect.SetMultimap;
-import org.joda.time.DateTime;
-import org.joda.time.LocalDate;
-import org.sagebionetworks.bridge.exporter.synapse.ColumnDefinition;
-import org.sagebionetworks.bridge.exporter.synapse.TransferMethod;
-import org.sagebionetworks.repo.model.table.ColumnModel;
-import org.sagebionetworks.repo.model.table.ColumnType;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import org.sagebionetworks.bridge.config.Config;
-import org.sagebionetworks.bridge.exporter.helper.BridgeHelper;
-import org.sagebionetworks.bridge.exporter.helper.BridgeHelperTest;
-import org.sagebionetworks.bridge.exporter.helper.ExportHelper;
-import org.sagebionetworks.bridge.exporter.metrics.Metrics;
-import org.sagebionetworks.bridge.exporter.request.BridgeExporterRequest;
-import org.sagebionetworks.bridge.exporter.synapse.SynapseHelper;
-import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
-import org.sagebionetworks.bridge.exporter.util.TestUtil;
-import org.sagebionetworks.bridge.exporter.worker.ExportSubtask;
-import org.sagebionetworks.bridge.exporter.worker.ExportTask;
-import org.sagebionetworks.bridge.exporter.worker.ExportWorkerManager;
-import org.sagebionetworks.bridge.exporter.worker.TsvInfo;
-import org.sagebionetworks.bridge.file.InMemoryFileHelper;
-import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.rest.model.UploadFieldDefinition;
-import org.sagebionetworks.bridge.rest.model.UploadFieldType;
-import org.sagebionetworks.bridge.rest.model.UploadSchema;
-import org.sagebionetworks.bridge.schema.UploadSchemaKey;
-
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
@@ -57,6 +16,48 @@ import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import com.amazonaws.services.dynamodbv2.document.Item;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Multiset;
+import com.google.common.collect.SetMultimap;
+import org.joda.time.DateTime;
+import org.joda.time.LocalDate;
+import org.sagebionetworks.repo.model.table.ColumnModel;
+import org.sagebionetworks.repo.model.table.ColumnType;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import org.sagebionetworks.bridge.config.Config;
+import org.sagebionetworks.bridge.exporter.helper.BridgeHelper;
+import org.sagebionetworks.bridge.exporter.helper.BridgeHelperTest;
+import org.sagebionetworks.bridge.exporter.helper.ExportHelper;
+import org.sagebionetworks.bridge.exporter.metrics.Metrics;
+import org.sagebionetworks.bridge.exporter.record.ExportType;
+import org.sagebionetworks.bridge.exporter.request.BridgeExporterRequest;
+import org.sagebionetworks.bridge.exporter.synapse.ColumnDefinition;
+import org.sagebionetworks.bridge.exporter.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.exporter.synapse.TransferMethod;
+import org.sagebionetworks.bridge.exporter.util.BridgeExporterUtil;
+import org.sagebionetworks.bridge.exporter.util.TestUtil;
+import org.sagebionetworks.bridge.exporter.worker.ExportSubtask;
+import org.sagebionetworks.bridge.exporter.worker.ExportTask;
+import org.sagebionetworks.bridge.exporter.worker.ExportWorkerManager;
+import org.sagebionetworks.bridge.exporter.worker.TsvInfo;
+import org.sagebionetworks.bridge.file.InMemoryFileHelper;
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.model.UploadFieldDefinition;
+import org.sagebionetworks.bridge.rest.model.UploadFieldType;
+import org.sagebionetworks.bridge.rest.model.UploadSchema;
+import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 
 public class SynapseExportHandlerTest {
     private static final List<ColumnDefinition> MOCK_COLUMN_DEFINITION;
@@ -91,8 +92,9 @@ public class SynapseExportHandlerTest {
 
     // Constants to make a request.
     public static final LocalDate DUMMY_REQUEST_DATE = LocalDate.parse("2015-10-31");
+    private static final DateTime DUMMY_REQUEST_DATE_TIME = DateTime.parse("2015-10-31T23:59:59Z");
     public static final BridgeExporterRequest DUMMY_REQUEST = new BridgeExporterRequest.Builder()
-            .withDate(DUMMY_REQUEST_DATE).build();
+            .withEndDateTime(DUMMY_REQUEST_DATE_TIME).withExportType(ExportType.DAILY).build();
 
     // Constants to make a schema. In most tests, schema doesn't matter. However, in one particular test, namely the
     // test for our old hack to convert freeform text to attachments, we key off specific studies and schemas. This

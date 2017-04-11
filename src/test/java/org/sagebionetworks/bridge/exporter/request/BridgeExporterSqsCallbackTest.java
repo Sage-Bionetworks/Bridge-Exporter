@@ -23,12 +23,12 @@ public class BridgeExporterSqsCallbackTest {
         callback.setRecordProcessor(mockRecordProcessor);
 
         // execute and verify
-        callback.callback("{\"date\":\"2015-12-01\"}");
+        callback.callback("{\"endDateTime\":\"2015-10-31T23:59:59.000Z\", \"exportType\":\"DAILY\"}");
 
         ArgumentCaptor<BridgeExporterRequest> requestCaptor = ArgumentCaptor.forClass(BridgeExporterRequest.class);
         verify(mockRecordProcessor).processRecordsForRequest(requestCaptor.capture());
         BridgeExporterRequest request = requestCaptor.getValue();
-        assertEquals(request.getDate().toString(), "2015-12-01");
+        assertEquals(request.getEndDateTime().toString(), "2015-10-31T23:59:59.000Z");
     }
 
     @DataProvider(name = "malformedRequestProvider")
@@ -40,8 +40,6 @@ public class BridgeExporterSqsCallbackTest {
                 { "This is not JSON" },
                 {
                         "{\n"
-                        + "     \"date\":\"2016-08-12\",\n"
-                        + "     \"startDateTime\":\"2016-08-12T0:00-0700\",\n"
                         + "     \"endDateTime\":\"2016-08-13T0:00-0700\",\n"
                         + "     \"tag\":\"invalid request\"\n"
                         + "}"
