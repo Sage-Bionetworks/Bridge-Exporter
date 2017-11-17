@@ -11,11 +11,11 @@ deploy:
   secret_access_key:
     secure: IVPBSeFrGy/Oe4Jgxmp5BxTCEe1IuCQTPcZcmLr5E2FzVRqq7W7sKEOT8KKvt6OlpF+MUBY6jqJVT9AYweZqw7XrqzYzzLNIwWKwEMUptLlk46gOp0H6TWHPlSBf0jSB3OpaUkIbhaXTykyflyP4pYXzWAse/FL0T4kOCMaa4Fc=
   region: us-east-1
-  app: Bridge-EX
+  app: bridge-exporter-$TRAVIS_BRANCH-application
   env:
-    develop: Bridge-EX-Dev
-    uat: Bridge-EX-Uat
-    prod: Bridge-EX-Prod
+    develop: bridge-exporter-develop
+    uat: bridge-exporter-uat
+    prod: bridge-exporter-prod
   bucket_name: elasticbeanstalk-us-east-1-649232250620
   zip-file: target/Bridge-Exporter-2.0.war
   on:
