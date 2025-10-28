@@ -14,13 +14,13 @@ deploy:
   edge: true
   access_key_id:
     develop: AKIAJQOD25TNB4GR4LFQ
-    uat: AKIAJQOD25TNB4GR4LFQ
+    uat: AKIAWKBC6B4EQLJ6KI6U
     prod: AKIAZOKKB636GOXML5BE
   secret_access_key:
     develop:
       secure: "pNqzQgF5g5d7DetkKOO1yIlcdf9n2Y90TVC2ZyU7VWqXcMO2UWG6OvpcCH9+xbmp29bNVMoSD2NuF8YqjHIaAru5RRna6NH6HQTjc7QfXehkij7rKBs3Kl1b+PwV+DKeMTJuedoS91E3w4aH+k08Ktyeyw/WjbWFPVyq3djh5ZM="
     uat:
-      secure: "pNqzQgF5g5d7DetkKOO1yIlcdf9n2Y90TVC2ZyU7VWqXcMO2UWG6OvpcCH9+xbmp29bNVMoSD2NuF8YqjHIaAru5RRna6NH6HQTjc7QfXehkij7rKBs3Kl1b+PwV+DKeMTJuedoS91E3w4aH+k08Ktyeyw/WjbWFPVyq3djh5ZM="
+      secure: "e/Rvs/+tPgBjy3gSvxfFRxRxdvMN7yIdS9VaN8kqpD/1yxLNaLdIwWIaBsQsfuTXe37NB7DwPm5Ahx2y24HklmQjXSl7v4uHPIweh6BsHTaAww/Wguyyf5Y5F+sQUvH6o0ySjP7aUjLVFl3BGhYgSlV0Ng6L8V+zUaEQ0tfAjlJlPNsVUoa4esRNONs6q6gfEVeiqXMr/diydkNBAHfycB+wDrYeDWIoXEfTaMC/olIJpB0YQ0xYPDqAZ64AaVbknz5WFkvkN4y8LWWoqlv4tzygGE1EFzny9YR4+zHi4oO4aHA+tVefUc3yhvjH//t2YZusvXKRFSx+odng7ePmmFAHIo1l3R8Co8hXP0IkgqB1B9jA1cmRhkhy4PSFizhcOocWcEGN2rhh7RDJgmbgW/+NJF1Lhx5at2BGK6YYemrZjmKUw+hiKy6GvzDhquCdQsDDEYS/rFFyOAG6XGtiJBwJAD04gG/Ysxe4wgoEWKcpG2cuLVkQ5BgZlavuT6Th4acKXLMoSMbDh+t/bHIleRWncAvxMxfPWDbmyEP+nVFtBbafgtyBy/QR7gE8IC3XM3rEjVxf9/4y+W3l736cDqwmmmCuHpK05yEnZG5r149GqoTSN7bW801y6VyAsqRfNTJjHqIfWD4ZVlr66YxudRq9FV3qHnrQi2BJyDmIPV8="
     prod:
       secure: "m2pLbhytAmVF1J3/q9Ix+0722le/+1JNQp5AnxDdZ4pxr8RCEzweUsgP/JOgrgLG92lZ2WHjRqxjqcVhPUBRRRjJKdD2l7sBOL1Wi9MvmTL7mCDens9QEifyclHld7kSkWB9URe6Mp90GkdVNcFHEBBdrqgUYtMkxrBX+wiYeFE="
   region: us-east-1
